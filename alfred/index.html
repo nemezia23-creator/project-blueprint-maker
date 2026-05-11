@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="cyber" data-density="normal">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ALFRED — Agent OS</title>
+  <link rel="stylesheet" href="./themes/cyber.css" id="alfred-theme">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <script type="importmap">
+    {
+      "imports": {
+        "@alfred/": "./modules/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <header class="alfred-header">
+      <div class="brand">
+        <span class="brand-mark">◈</span>
+        <span class="brand-name">ALFRED</span>
+        <span class="brand-version">v2.0 · phase 1</span>
+      </div>
+      <div class="header-actions">
+        <select id="theme-select" aria-label="Thème">
+          <option value="cyber">Cyber</option>
+          <option value="midnight">Midnight</option>
+          <option value="light">Light</option>
+        </select>
+        <select id="density-select" aria-label="Densité">
+          <option value="compact">Compact</option>
+          <option value="normal" selected>Normal</option>
+          <option value="spacious">Spacious</option>
+        </select>
+        <button id="open-settings" type="button">⚙ Réglages</button>
+      </div>
+    </header>
+
+    <main class="alfred-main">
+      <section class="boot-panel">
+        <h1>Système initialisé</h1>
+        <p class="subtitle">Phase 1 · Fondations</p>
+        <ul id="boot-log" class="boot-log" aria-live="polite"></ul>
+        <div class="boot-status" id="boot-status">Démarrage…</div>
+      </section>
+    </main>
+
+    <footer class="alfred-footer">
+      <span id="footer-db">DB —</span>
+      <span id="footer-api">API —</span>
+      <span id="footer-build">build local · zero-build · ES modules</span>
+    </footer>
+  </div>
+
+  <script type="module" src="./modules/app.js"></script>
+</body>
+</html>
