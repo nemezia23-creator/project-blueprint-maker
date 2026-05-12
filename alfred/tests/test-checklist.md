@@ -1,6 +1,15 @@
 # Test checklist — Phase 1
 
 > Tests manuels (pas de framework). À cocher avant de passer à Phase 2.
+>
+> **Avant de commencer** : assure-toi d'avoir lancé Alfred en suivant les 3 étapes du [README](../README.md#-démarrer-alfred-en-3-étapes-zéro-connaissance-technique). Si tu vois "Your app will live here" → tu es sur la preview Lovable, pas sur Alfred. Relis le README.
+
+## Pré-requis (à valider en premier)
+
+- [ ] J'ai ouvert un terminal **dans le dossier `alfred/`** (pas à la racine)
+- [ ] La commande `python3 -m http.server 8080` (ou équivalent) tourne, terminal ouvert
+- [ ] J'accède à `http://localhost:8080` dans le navigateur (PAS la preview Lovable)
+- [ ] La page n'est pas blanche : je vois la barre **ALFRED** en haut et un panneau "Système initialisé"
 
 ## Boot
 
