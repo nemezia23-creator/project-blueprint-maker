@@ -8,6 +8,7 @@ import { runMigrationIfNeeded } from './core/db-migrate.js';
 import { loadSettings, getSetting } from './core/settings.js';
 import { hasApiKey, setApiKey, clearApiKey } from './core/api-bridge.js';
 import { bootTheme, applyTheme, applyDensity } from './ui/theme-engine.js';
+import { mountChat } from './chat/chat-ui.js';
 
 const log = createLogger('app');
 
