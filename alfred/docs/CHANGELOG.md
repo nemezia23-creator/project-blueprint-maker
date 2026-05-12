@@ -50,3 +50,12 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/).
 - Cookie `mistral_api_key` préservé (fallback localStorage)
 - IndexedDB V1 lue mais jamais supprimée
 - Flag `settings.migrated_v2` ⇒ migration idempotente
+
+## Phase 2 — Chat mono-onglet
+
+- Ajout module `chat/` : chat-manager, chat-stream (SSE Mistral), chat-renderer (markdown-lite + sanitization), chat-actions, chat-ui.
+- Ajout `ui/sanitize.js` (escapeHtml, safeUrl) et `ui/toast.js` (notifications ARIA-live).
+- Ajout `themes/chat.css` (styles toolbar, messages, markdown, input bar).
+- Settings : `chat.model`, `chat.temperature`, `chat.context_window`, `chat.system_prompt`.
+- Bonus UX : Stop streaming, Regenerate, Edit user message, Rating ★, Export .md/.txt, sélecteur de modèle, indicateur tokens approx.
+- Sécurité : tout contenu IA passe par `escapeHtml` avant transformation markdown ; liens limités à http(s)/mailto.

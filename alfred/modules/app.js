@@ -8,6 +8,7 @@ import { runMigrationIfNeeded } from './core/db-migrate.js';
 import { loadSettings, getSetting } from './core/settings.js';
 import { hasApiKey, setApiKey, clearApiKey } from './core/api-bridge.js';
 import { bootTheme, applyTheme, applyDensity } from './ui/theme-engine.js';
+import { mountChat } from './chat/chat-ui.js';
 
 const log = createLogger('app');
 
@@ -63,10 +64,17 @@ async function boot() {
       `DB · ${Object.entries(stats).map(([k, v]) => `${k}:${v}`).join(' · ')}`;
     $('#footer-api').textContent = hasApiKey('mistral') ? 'API · Mistral ✓' : 'API · Mistral ✗ (cliquer Réglages)';
 
-    $('#boot-status').textContent = 'Système prêt — Phase 1 opérationnelle.';
+    $('#boot-status').textContent = 'Système prêt — Phase 2 opérationnelle.';
     $('#boot-status').dataset.ready = 'true';
     bus.emit(EVT.BOOT_READY);
     log.info('boot complete');
+
+    // Mount chat UI (replaces boot panel)
+    const main = $('#alfred-main');
+    main.innerHTML = '<section class="chat-shell" id="alfred-chat" aria-label="Chat"></section>';
+    main.style.padding = 'var(--space-3)';
+    main.style.alignItems = 'stretch';
+    await mountChat($('#alfred-chat'));
   } catch (err) {
     log.error('boot failed', err);
     logBoot(`✗ erreur: ${err.message}`, 'error');

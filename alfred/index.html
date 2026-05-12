@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ALFRED — Agent OS</title>
   <link rel="stylesheet" href="./themes/cyber.css" id="alfred-theme">
+  <link rel="stylesheet" href="./themes/chat.css">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
   <script type="importmap">
     {
@@ -20,7 +21,7 @@
       <div class="brand">
         <span class="brand-mark">◈</span>
         <span class="brand-name">ALFRED</span>
-        <span class="brand-version">v2.0 · phase 1</span>
+        <span class="brand-version">v2.0 · phase 2</span>
       </div>
       <div class="header-actions">
         <select id="theme-select" aria-label="Thème">
@@ -37,10 +38,10 @@
       </div>
     </header>
 
-    <main class="alfred-main">
-      <section class="boot-panel">
+    <main class="alfred-main" id="alfred-main">
+      <section class="boot-panel" id="boot-panel">
         <h1>Système initialisé</h1>
-        <p class="subtitle">Phase 1 · Fondations</p>
+        <p class="subtitle">Phase 2 · Chat mono-onglet</p>
         <ul id="boot-log" class="boot-log" aria-live="polite"></ul>
         <div class="boot-status" id="boot-status">Démarrage…</div>
       </section>
