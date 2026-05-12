@@ -1,121 +1,94 @@
+# Plan — Phase 2 : Chat mono-onglet
 
-# Plan — Alfred Agent OS v2
+Objectif : rendre Alfred utilisable en conversation simple avec Mistral (parité V1) + une poignée de bonus UX qui ne préjugent pas du multi-onglets (Phase 3).
 
-## Contexte & décisions cadre
+## Livrables fonctionnels
 
-- **Stack** : SPA **vanilla JS + ES Modules natifs**, zero build, zero npm. Déployable par simple copie de dossier (local via `python -m http.server` ou `file://`, puis VPS via Nginx/Caddy). Le squelette React/TanStack actuel sera **mis de côté** (l'app Alfred vivra dans un dossier autonome `alfred/` à la racine, servable indépendamment).
-- **Persistance** : IndexedDB (`AlfredDB` v4) + migration auto depuis `VOANH_AI_DB` v3. Aucun backend.
-- **LLM** : appel direct API Mistral côté client, clé stockée en cookie/localStorage (logique V1 préservée). `APIBridge` prévu pour brancher d'autres providers plus tard.
-- **Agents de supervision** : intégrés comme **agents IA réels in-app** (8 personas système avec prompts dédiés) ET documentés dans `docs/SUPERVISION.md`.
-- **Livraison** : par phases incrémentales, chacune testable et fonctionnelle de bout en bout.
+1. **Saisie & envoi**
+   - Textarea auto-resize, `Enter` = envoyer, `Shift+Enter` = nouvelle ligne
+   - Compteur de caractères + estimation tokens (approx. `chars/4`)
+   - Bouton Envoyer + bouton **Stop** pendant le streaming
+   - Sélecteur de modèle (mistral-large-latest, mistral-small-latest, etc.)
 
----
+2. **Streaming Mistral**
+   - `chat-stream.js` : appel `POST /v1/chat/completions` avec `stream:true`, parsing SSE ligne par ligne, gestion `[DONE]`
+   - `AbortController` pour stop propre
+   - Backoff + message d'erreur lisible (401 clé invalide, 429 rate limit, réseau)
 
-## Arborescence cible
+3. **Rendu**
+   - `chat-renderer.js` : markdown-lite maison (headings, bold/italic, listes, liens, blockquotes, code inline, blocs ```lang)
+   - Sanitization stricte (pas d'innerHTML brut sur contenu utilisateur/IA — escape puis injection contrôlée)
+   - Copie code par bloc (bouton dans le coin)
+   - Auto-scroll intelligent : suit le bas tant que l'utilisateur n'a pas remonté
+
+4. **Historique & persistance**
+   - 1 chat unique stocké dans `chats` (IndexedDB), id fixe `default`
+   - Restauration au boot, fenêtre de contexte (N derniers messages, configurable, défaut 20)
+   - Titre auto-généré (premiers mots du 1er message utilisateur)
+
+5. **Actions par message**
+   - Copier (markdown brut)
+   - Rating ★ (0–5, persisté)
+   - Supprimer
+   - **Regénérer** (bonus) : relance le dernier tour assistant
+   - **Éditer** (bonus) : éditer un message user et tronquer la suite
+
+6. **Export / Reset**
+   - Export `.md` et `.txt` du chat courant
+   - Bouton "Nouveau chat" (vide l'historique après confirmation)
+
+7. **Bonus UX retenus**
+   - Indicateur tokens (in/out approximatif)
+   - Stop streaming
+   - Regenerate / Edit
+   - Toast d'erreur réseau/API (composant `ui/toast.js` minimal créé ici, réutilisé en Phase 3+)
+
+## Structure de fichiers ajoutés
 
 ```
-alfred/
-├── index.html                    # Entrée minimale + importmap
-├── modules/
-│   ├── app.js                    # Bootstrap
-│   ├── core/                     # event-bus, logger, db, db-migrate, settings, api-bridge
-│   ├── agents/                   # agent-manager, schema, runner, orchestrator, prompt-builder
-│   ├── chat/                     # chat-manager, stream, renderer, actions
-│   ├── tabs/                     # tab-engine, renderer, keybindings
-│   ├── memory/                   # manager, index (FTS maison), filters
-│   ├── files/                    # upload, parser, segmenter, summarizer
-│   ├── tasks/                    # engine, kanban, graph, sync
-│   ├── commands/                 # palette, registry, builtins
-│   └── ui/                       # modal, toast, dropdown, progress, keyboard, theme-engine
-├── themes/                       # cyber.css, midnight.css, light.css
-├── assets/                       # fonts, icons
-├── docs/                         # SPECIFICATION.md, ARCHITECTURE.md, SUPERVISION.md, CHANGELOG.md
-└── tests/test-checklist.md
+alfred/modules/chat/
+  chat-manager.js      # état conversation, persistance, fenêtre contexte
+  chat-stream.js       # SSE Mistral + AbortController
+  chat-renderer.js     # markdown-lite + sanitization + code blocks
+  chat-actions.js      # copy/export/rating/regenerate/edit/delete
+  chat-ui.js           # composition DOM (input bar, message list, toolbar)
+alfred/modules/ui/
+  toast.js             # notifications légères (ARIA live)
+  sanitize.js          # helpers escape HTML
 ```
 
----
+`index.html` : ajout du conteneur chat (`#alfred-chat`) ; `app.js` monte `chat-ui` après boot.
 
-## Phases de livraison
+## Détails techniques
 
-### Phase 1 — Fondations (Core + Shell)
-- `index.html` minimal + importmap
-- `core/event-bus.js`, `logger.js`, `settings.js`
-- `core/db.js` (wrapper IndexedDB) + `db-migrate.js` (V1→V2, stores préservés)
-- `core/api-bridge.js` (Mistral d'abord, interface extensible)
-- Theme engine + portage des 3 thèmes V1 (cyber/midnight/light) en CSS séparés avec tokens (`--surface-0..5`, accents, density)
-- **Critère** : page se charge, DB initialisée, settings persistés, thème commutable.
+- **API Mistral** : endpoint `https://api.mistral.ai/v1/chat/completions`, header `Authorization: Bearer <key>` lu via `api-bridge.getApiKey('mistral')`. Body : `{ model, messages, stream:true, temperature, max_tokens }` (temp/max_tokens dans settings, valeurs par défaut V1).
+- **Parsing SSE** : lecture du `ReadableStream` du `fetch`, split sur `\n\n`, lignes `data: {json}`, accumulation du `delta.content`. Émet `EVT.CHAT_STREAMING` à chaque chunk, `EVT.CHAT_MESSAGE` à la fin.
+- **Schéma message** :
+  ```js
+  { id, chatId:'default', role:'user'|'assistant'|'system', content, ts, tokens?:{in,out}, rating?:0..5, model? }
+  ```
+- **Markdown-lite** : regex contrôlées + escape préalable. Pas de dépendance externe (cohérent avec stack zero-build).
+- **Sanitization** : tout texte passe par `escapeHtml()` avant transformation markdown ; les `<a>` n'autorisent que `http(s):` et `mailto:`.
+- **Settings ajoutés** : `chat.model`, `chat.temperature`, `chat.max_tokens`, `chat.context_window`, `chat.system_prompt` (vide par défaut).
+- **EventBus** : utilise `EVT.CHAT_MESSAGE`, `CHAT_STREAMING`, `CHAT_ERROR` déjà déclarés Phase 1.
+- **Compat V1** : la clé API en cookie reste source de vérité (déjà géré par `api-bridge`).
 
-### Phase 2 — Chat mono-onglet (parité V1 minimale)
-- `chat/chat-manager.js` : historique, fenêtre de contexte
-- `chat/chat-stream.js` : SSE Mistral
-- `chat/chat-renderer.js` : markdown-lite, code blocks, pliage messages
-- `chat/chat-actions.js` : copier, export `.md`/`.txt`, rating ★
-- Saisie clé API (cookie compat V1)
-- **Critère** : conversation fonctionnelle équivalente V1.
+## Critères d'acceptation
 
-### Phase 3 — Multi-onglets
-- `tabs/tab-engine.js` : CRUD onglet, isolation d'état, restauration session
-- `tabs/tab-renderer.js` : barre d'onglets (drag-reorder, ellipsis, close hover)
-- `tabs/tab-keybindings.js` : Ctrl+N/W/Tab, middle-click close
-- Cap 50 onglets, défaut 20
-- **Critère** : N conversations parallèles persistées.
+- [ ] Saisir un message → réponse streamée token par token
+- [ ] Bouton Stop interrompt proprement le stream
+- [ ] Refresh → conversation restaurée
+- [ ] Export `.md` produit un fichier lisible avec roles
+- [ ] Erreur 401 affiche un toast clair invitant à reconfigurer la clé
+- [ ] Regenerate / Edit fonctionnent et tronquent l'historique correctement
+- [ ] Aucun XSS possible via markdown ou contenu IA (test : `<img src=x onerror=...>` reste texte)
+- [ ] Checklist mise à jour dans `tests/test-checklist.md`
 
-### Phase 4 — Système d'agents
-- `agents/agent-schema.js` : validation JSON
-- `agents/agent-manager.js` : CRUD, isolation
-- `agents/agent-prompt-builder.js` : composition system prompt
-- `agents/agent-runner.js` : contexte d'exécution
-- UI gestion agents (modal CRUD) + dropdown `@mention` (`ui/dropdown.js`)
-- **Critère** : créer agent, l'invoquer via `@nom` dans le chat.
+## Hors scope (reporté)
 
-### Phase 5 — Mémoire documentaire
-- `memory/memory-manager.js` : CRUD + versioning léger
-- `memory/memory-index.js` : full-text search maison (tokenisation + tf-idf simple)
-- `memory/memory-filters.js` : tag/type/date/owner/confidence
-- Injection `[⬡ MEM×N]` dans messages (badge + drawer détail)
-- UI panneau mémoire
-- **Critère** : ajouter mémoire, retrouver via recherche, contexte injecté dans prompts.
+- Multi-onglets → Phase 3
+- @mention agents → Phase 4
+- Injection mémoire `[⬡ MEM×N]` → Phase 5
+- Fichiers joints au chat → Phase 6
 
-### Phase 6 — Pipeline fichiers
-- `files/file-upload.js` : drag-drop + validation
-- `files/file-parser.js` : TXT, JSON, CSV nativement ; PDF/DOCX via libs CDN (pdfjs, mammoth — chargées dynamiquement)
-- `files/file-segmenter.js` : chunking token-aware
-- `files/file-summarizer.js` : résumé IA → injection mémoire
-- **Critère** : upload PDF → parsé → résumé → mémoire interrogeable.
-
-### Phase 7 — Orchestrateur + Tasks
-- `agents/orchestrator.js` : plan → execute (parsing JSON sécurisé)
-- `tasks/task-engine.js` : lifecycle (pending/running/done/failed)
-- `tasks/task-kanban.js` + `task-graph.js` (DAG) + `task-sync.js`
-- **Critère** : prompt complexe → orchestrateur découpe → tasks visibles dans kanban → agents exécutent.
-
-### Phase 8 — Command Palette + Agents de supervision + Polish
-- `commands/command-palette.js` (Ctrl+K), registry, builtins
-- **8 agents de supervision** seedés au premier lancement : `alfred-architect`, `alfred-reviewer`, `alfred-qa`, `alfred-pm`, `alfred-ux`, `alfred-security`, `alfred-perf`, `alfred-docs` — chacun avec system prompt dédié dérivé de `supervision_agent.md`, invocables via `@`
-- `docs/SUPERVISION.md` complet
-- Polish : a11y (ARIA, navigation clavier), perf (virtual scrolling chat long), responsive
-- **Critère** : Ctrl+K fonctionnel, 8 agents pré-installés opérationnels, checklist QA passée.
-
----
-
-## Détails techniques transverses
-
-- **EventBus typed** : enum `EVT.*` partagé, pub/sub intra-fenêtre.
-- **Sécurité** : sanitization HTML systématique (pas d'`innerHTML` brut sur contenu dynamique), JSON.parse de l'orchestrateur en try-catch + schema validation, clé API jamais loggée.
-- **Compat V1** : migration auto, ancienne DB non supprimée, flag `settings.migrated_v2`.
-- **Déploiement local** : `cd alfred && python3 -m http.server 8080`. **VPS** : `rsync alfred/ user@vps:/var/www/alfred/` + bloc Nginx statique (fourni en doc Phase 1).
-- **Pas de framework** : aucune dépendance npm. Libs externes (pdfjs, mammoth) chargées via CDN à la demande dans Phase 6.
-
----
-
-## Hors scope explicite
-
-- Pas de React/TanStack/Vite pour Alfred (le shell Lovable existant est conservé inerte mais ne sera pas étendu).
-- Pas d'auth multi-utilisateur, pas de backend, pas de sync cloud (V1 → V2 reste 100 % client).
-- PWA / offline manifest : reportés post-Phase 8.
-
----
-
-## Démarrage proposé
-
-Commencer par **Phase 1** (fondations + thèmes + DB + migration). Une fois validée et testée localement, enchaîner Phase 2. Chaque phase = un commit propre, testable isolément.
+Une fois validé, j'implémente, je mets à jour `CHANGELOG.md` et la checklist.
