@@ -49,3 +49,48 @@ Dans la console :
 Alfred.bus.on('boot:ready', () => console.log('READY'));
 ```
 - [ ] Recharger → "READY" affiché
+
+---
+
+# Test checklist — Phase 2
+
+## Chat de base
+
+- [ ] Saisir un message + Entrée → message user affiché, réponse Alfred streamée token par token
+- [ ] Maj+Entrée insère un saut de ligne sans envoyer
+- [ ] Compteur "N car · ~M tok" se met à jour en tapant
+- [ ] Sélecteur de modèle change `chat.model` (persisté après refresh)
+- [ ] Sans clé API → toast d'erreur, pas d'envoi
+
+## Streaming & contrôle
+
+- [ ] Bouton "■ Stop" apparaît pendant la génération, disparaît à la fin
+- [ ] Stop interrompt et conserve le contenu partiel marqué `[interrompu]`
+- [ ] Erreur 401 → toast "Clé API invalide…"
+- [ ] Erreur réseau → toast lisible
+
+## Rendu markdown
+
+- [ ] Bloc ```js …``` rendu avec fond, mono, bouton "copy" fonctionnel
+- [ ] **gras**, *italique*, `code inline`, listes, blockquotes, headings rendus
+- [ ] XSS test : envoyer `<img src=x onerror=alert(1)>` → texte affiché tel quel, pas d'alerte
+
+## Persistance
+
+- [ ] Refresh → conversation restaurée (messages + ratings)
+- [ ] DevTools IndexedDB `AlfredDB.chats` contient les messages
+
+## Actions message
+
+- [ ] Hover message → barre d'actions visible
+- [ ] Copier → toast "Copié."
+- [ ] Note ★ persistée (re-cliquer même note = retire)
+- [ ] Éditer un message user → tronque la suite et relance Alfred
+- [ ] Regénérer un message Alfred → supprime et relance
+- [ ] Supprimer un message → confirmation + retiré
+
+## Export / Reset
+
+- [ ] Export .md télécharge un fichier lisible avec horodatages
+- [ ] Export .txt fonctionne
+- [ ] "⟲ Nouveau" → confirmation + chat vidé
