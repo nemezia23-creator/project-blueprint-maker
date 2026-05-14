@@ -71,7 +71,7 @@ Laisse le terminal ouvert tant que tu utilises Alfred. `Ctrl+C` pour arrêter.
 
 Au chargement (fond bleu nuit, thème "Cyber" par défaut) :
 
-1. En haut : barre **ALFRED · v2.0 · phase 1** avec sélecteurs Thème / Densité / bouton ⚙ Réglages
+1. En haut : barre **ALFRED · v2.0 · phase 4** avec sélecteurs Thème / Densité / bouton ⚙ Réglages
 2. Au centre : panneau **"Système initialisé"** avec une liste de logs qui défile :
    ```
    ✓ chargement settings…
@@ -80,7 +80,7 @@ Au chargement (fond bleu nuit, thème "Cyber" par défaut) :
    ✓ thème cyber · densité normal
    ```
 3. Tout en bas : ligne `DB · tabs:0 · chats:0 · agents:0 …` et `API · Mistral ✗ (cliquer Réglages)`
-4. Le statut final affiche en vert : **"Système prêt — Phase 1 opérationnelle."**
+4. Le statut final affiche en vert : **"Système prêt — Phase 4 opérationnelle."**
 
 ---
 
@@ -156,7 +156,7 @@ alfred.example.com {
 }
 ```
 
-## État actuel — Phase 1
+## État actuel — Phase 4
 
 ✓ Shell HTML + importmap
 ✓ EventBus typed (pub/sub)
@@ -178,7 +178,7 @@ alfred/
 ├── modules/
 │   ├── app.js              ← bootstrap
 │   ├── core/               ← event-bus, logger, db, db-migrate, settings, api-bridge
-│   ├── chat/               ← (Phase 2)
+│   ├── chat/               ← Phase 2
 │   └── ui/                 ← theme-engine, toast, sanitize
 ├── themes/                 ← _base.css, cyber.css, midnight.css, light.css, chat.css
 ├── tests/test-checklist.md ← tests manuels à cocher

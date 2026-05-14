@@ -11,6 +11,35 @@ const STYLE = {
   error: 'color:#ff3366;font-weight:bold',
 };
 
+// In-memory ring buffer + subscribers (for in-app DevTools panel).
+const RING_MAX = 500;
+const RING = [];
+const SUBS = new Set();
+
+export function getLogHistory() {
+  return RING.slice();
+}
+
+export function onLog(handler) {
+  SUBS.add(handler);
+  return () => SUBS.delete(handler);
+}
+
+export function clearLogHistory() {
+  RING.length = 0;
+  for (const fn of SUBS) {
+    try { fn({ type: 'clear' }); } catch { /* noop */ }
+  }
+}
+
+function pushEntry(entry) {
+  RING.push(entry);
+  if (RING.length > RING_MAX) RING.shift();
+  for (const fn of SUBS) {
+    try { fn(entry); } catch { /* noop */ }
+  }
+}
+
 export function setLogLevel(level) {
   if (LEVELS[level] !== undefined) GLOBAL_LEVEL = level;
 }
@@ -26,6 +55,7 @@ function shouldLog(level) {
 export function createLogger(namespace) {
   const tag = `[${namespace}]`;
   const make = (level) => (...args) => {
+    pushEntry({ ts: Date.now(), level, ns: namespace, args });
     if (!shouldLog(level)) return;
     const fn = console[level] || console.log;
     fn(`%c${tag}`, STYLE[level], ...args);
