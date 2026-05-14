@@ -305,11 +305,11 @@ export function attachMentionDropdown(textarea, onPick) {
 
   textarea.addEventListener('keydown', (e) => {
     if (!dd) return;
-    if (e.key === 'ArrowDown') { e.preventDefault(); active = (active + 1) % matches.length; render(); }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); active = (active - 1 + matches.length) % matches.length; render(); }
-    else if (e.key === 'Enter') { e.preventDefault(); pick(active); }
-    else if (e.key === 'Escape') { close(); }
-  });
+    if (e.key === 'ArrowDown') { e.preventDefault(); e.stopImmediatePropagation(); active = (active + 1) % matches.length; render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); e.stopImmediatePropagation(); active = (active - 1 + matches.length) % matches.length; render(); }
+    else if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); e.stopImmediatePropagation(); pick(active); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+  }, { capture: true });
 
   textarea.addEventListener('blur', () => setTimeout(close, 120));
 }
