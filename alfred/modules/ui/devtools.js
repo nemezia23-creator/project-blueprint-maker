@@ -366,9 +366,18 @@ export function open(tab) {
   }
   if (!state.unsubBus) {
     state.unsubBus = bus.on('*', (type, payload) => {
-      state.busEvents.push({ ts: Date.now(), type, payload });
+      // Skip noisy events unless explicitly enabled
+      if (NOISY_EVENTS.has(type) && !state.includeNoisy) return;
+      // Snapshot to avoid retaining live, growing references (CHAT_STREAMING etc.)
+      const snap = snapshotPayload(payload);
+      const ev = { ts: Date.now(), type, payload: snap };
+      state.busEvents.push(ev);
       if (state.busEvents.length > BUS_MAX) state.busEvents.shift();
-      if (state.open && state.tab === 'bus') renderBus(document.getElementById('devtools-body'));
+      // Append-only DOM update (no full re-render) when bus tab visible
+      if (state.open && state.tab === 'bus') {
+        const list = document.querySelector('.devtools-bus');
+        if (list) appendBusRow(list, ev);
+      }
     });
   }
   render();
