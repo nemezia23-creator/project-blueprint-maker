@@ -83,6 +83,7 @@ export async function updateAgent(id, patch) {
   agents.sort((x, y) => (x.name || '').localeCompare(y.name || ''));
   await put('agents', cur);
   bus.emit(EVT.AGENT_UPDATED, cur);
+  log.info(`agent updated: "${cur.name}" (${cur.id})`);
   return cur;
 }
 
@@ -92,6 +93,7 @@ export async function deleteAgent(id) {
   const [removed] = agents.splice(idx, 1);
   await del('agents', id);
   bus.emit(EVT.AGENT_DELETED, { id, agent: removed });
+  log.info(`agent deleted: "${removed.name}" (${id})`);
 }
 
 export async function archiveAgent(id) {
@@ -106,7 +108,7 @@ export async function duplicateAgent(id) {
   if (!a) throw new Error('Agent introuvable');
   const copy = { ...a, name: `${a.name} (copie)`, lifecycle: 'draft' };
   delete copy.id; delete copy.createdAt; delete copy.updatedAt;
-  return createAgent(copy);
+  return createAgent(copy, { autoSuffix: true });
 }
 
 export function exportAgent(id) {
@@ -118,7 +120,7 @@ export function exportAgent(id) {
 export async function importAgent(json) {
   const obj = typeof json === 'string' ? JSON.parse(json) : json;
   delete obj.id; // assign new
-  return createAgent(obj);
+  return createAgent(obj, { autoSuffix: true });
 }
 
 export async function noteAgentUsed(id, rating = null) {
