@@ -42,14 +42,34 @@ function existingNames() {
   return agents.map((a) => ({ id: a.id, name: a.name }));
 }
 
-export async function createAgent(input) {
-  const v = validateAgent(input, { existingNames: existingNames() });
+// Returns a unique variant of `name`. If taken, appends " (2)", " (3)"…
+// excludeId lets a rename re-use its own current name.
+function uniquifyName(name, { excludeId = null } = {}) {
+  const base = String(name || '').trim();
+  if (!base) return base;
+  const taken = new Set(
+    agents.filter((a) => a.id !== excludeId).map((a) => a.name.toLowerCase())
+  );
+  if (!taken.has(base.toLowerCase())) return base;
+  // Strip an existing "(N)" suffix to rebuild cleanly
+  const m = base.match(/^(.*?)\s*\((\d+)\)\s*$/);
+  const root = m ? m[1].trim() : base;
+  let n = m ? Number(m[2]) + 1 : 2;
+  while (taken.has(`${root} (${n})`.toLowerCase())) n++;
+  return `${root} (${n})`;
+}
+
+export async function createAgent(input, { autoSuffix = false } = {}) {
+  let candidate = { ...input };
+  if (autoSuffix) candidate.name = uniquifyName(candidate.name);
+  const v = validateAgent(candidate, { existingNames: existingNames() });
   if (!v.ok) throw new Error(v.errors.join(' · '));
   const a = v.agent;
   agents.push(a);
   agents.sort((x, y) => (x.name || '').localeCompare(y.name || ''));
   await put('agents', a);
   bus.emit(EVT.AGENT_CREATED, a);
+  log.info(`agent created: "${a.name}" (${a.id})`);
   return a;
 }
 
