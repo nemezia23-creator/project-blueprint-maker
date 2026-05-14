@@ -141,11 +141,17 @@ function appendLogRow(list, entry) {
     const hay = (entry.ns + ' ' + entry.args.map(safeStringify).join(' ')).toLowerCase();
     if (!hay.includes(state.logFilter.toLowerCase())) return;
   }
+  const fullMsg = entry.args.map(safeStringify).join(' ');
   const li = el('li', { class: `devtools-log lvl-${entry.level}` }, [
-    el('span', { class: 'devtools-log-ts' }, fmtTime(entry.ts)),
-    el('span', { class: 'devtools-log-lvl' }, entry.level),
-    el('span', { class: 'devtools-log-ns' }, `[${entry.ns}]`),
-    el('span', { class: 'devtools-log-msg' }, entry.args.map(safeStringify).join(' ')),
+    el('details', {}, [
+      el('summary', {}, [
+        el('span', { class: 'devtools-log-ts' }, fmtTime(entry.ts)),
+        el('span', { class: 'devtools-log-lvl' }, entry.level),
+        el('span', { class: 'devtools-log-ns' }, `[${entry.ns}]`),
+        el('span', { class: 'devtools-log-msg' }, fullMsg.length > 240 ? fullMsg.slice(0, 240) + '…' : fullMsg),
+      ]),
+      fullMsg.length > 240 ? el('pre', { class: 'devtools-db-json' }, fullMsg) : null,
+    ]),
   ]);
   list.appendChild(li);
 }
