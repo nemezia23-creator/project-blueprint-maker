@@ -6,6 +6,9 @@
   <title>ALFRED — Agent OS</title>
   <link rel="stylesheet" href="./themes/cyber.css" id="alfred-theme">
   <link rel="stylesheet" href="./themes/chat.css">
+  <link rel="stylesheet" href="./themes/tabs.css">
+  <link rel="stylesheet" href="./themes/devtools.css">
+  <link rel="stylesheet" href="./themes/agents.css">
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600&display=swap" rel="stylesheet">
   <script type="importmap">
     {
@@ -21,7 +24,7 @@
       <div class="brand">
         <span class="brand-mark">◈</span>
         <span class="brand-name">ALFRED</span>
-        <span class="brand-version">v2.0 · phase 2</span>
+        <span class="brand-version">v2.0 · phase 4</span>
       </div>
       <div class="header-actions">
         <select id="theme-select" aria-label="Thème">
@@ -35,13 +38,15 @@
           <option value="spacious">Spacious</option>
         </select>
         <button id="open-settings" type="button">⚙ Réglages</button>
+        <button id="open-agents" type="button" title="Gérer les agents">◈ Agents</button>
+        <button id="open-devtools" type="button" title="DevTools (Ctrl+Shift+D)">🛠 DevTools</button>
       </div>
     </header>
 
     <main class="alfred-main" id="alfred-main">
       <section class="boot-panel" id="boot-panel">
         <h1>Système initialisé</h1>
-        <p class="subtitle">Phase 2 · Chat mono-onglet</p>
+        <p class="subtitle">Phase 4 · Système d'agents</p>
         <ul id="boot-log" class="boot-log" aria-live="polite"></ul>
         <div class="boot-status" id="boot-status">Démarrage…</div>
       </section>

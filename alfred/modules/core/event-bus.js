@@ -39,16 +39,22 @@ export const EVT = Object.freeze({
 class EventBus {
   constructor() {
     this._listeners = new Map(); // type -> Set<fn>
+    this._wildcards = new Set(); // fn(type, payload)
   }
 
   on(type, handler) {
     if (typeof handler !== 'function') throw new TypeError('handler must be a function');
+    if (type === '*') {
+      this._wildcards.add(handler);
+      return () => this._wildcards.delete(handler);
+    }
     if (!this._listeners.has(type)) this._listeners.set(type, new Set());
     this._listeners.get(type).add(handler);
     return () => this.off(type, handler);
   }
 
   off(type, handler) {
+    if (type === '*') { this._wildcards.delete(handler); return; }
     const set = this._listeners.get(type);
     if (set) set.delete(handler);
   }
@@ -62,6 +68,12 @@ class EventBus {
   }
 
   emit(type, payload) {
+    for (const fn of [...this._wildcards]) {
+      try { fn(type, payload); } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error(`[EventBus] wildcard handler error for "${type}"`, err);
+      }
+    }
     const set = this._listeners.get(type);
     if (!set) return;
     // Copy to allow off() during dispatch
@@ -77,8 +89,9 @@ class EventBus {
   }
 
   clear(type) {
+    if (type === '*') { this._wildcards.clear(); return; }
     if (type) this._listeners.delete(type);
-    else this._listeners.clear();
+    else { this._listeners.clear(); this._wildcards.clear(); }
   }
 }
 

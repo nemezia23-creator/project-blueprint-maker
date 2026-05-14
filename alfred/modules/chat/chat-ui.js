@@ -3,7 +3,7 @@
 
 import {
   loadChat, listMessages, addMessage, updateMessage, deleteMessage,
-  truncateAfter, resetChat, buildContext, approxTokens, DEFAULT_CHAT_ID,
+  truncateAfter, resetChat, buildContext, approxTokens,
 } from './chat-manager.js';
 import { streamMistral, ChatStreamError } from './chat-stream.js';
 import { renderMarkdown, bindCodeCopy } from './chat-renderer.js';
@@ -14,6 +14,11 @@ import { getSetting, setSetting } from '../core/settings.js';
 import { hasApiKey } from '../core/api-bridge.js';
 import { bus, EVT } from '../core/event-bus.js';
 import { createLogger } from '../core/logger.js';
+import { getActiveId, maybeAutoTitle, touchActive } from '../tabs/tab-engine.js';
+import { getTab, setTabAgent } from '../tabs/tab-engine.js';
+import { getAgent, listAgents, noteAgentUsed } from '../agents/agent-manager.js';
+import { buildSystemPrompt } from '../agents/agent-prompt-builder.js';
+import { fillAgentSelect, attachMentionDropdown, openAgentManager } from '../agents/agent-ui.js';
 
 const log = createLogger('chat-ui');
 
@@ -32,6 +37,8 @@ export async function mountChat(container) {
   root.innerHTML = `
     <div class="chat-toolbar">
       <select class="chat-model" aria-label="Modèle"></select>
+      <select class="chat-agent-select" aria-label="Agent"></select>
+      <button class="chat-btn" data-action="manage-agents" type="button" title="Gérer les agents">◈ Agents</button>
       <span class="chat-spacer"></span>
       <button class="chat-btn" data-action="export-md" type="button" title="Export markdown">⤓ .md</button>
       <button class="chat-btn" data-action="export-txt" type="button" title="Export texte">⤓ .txt</button>
@@ -54,6 +61,7 @@ export async function mountChat(container) {
   stopBtn = root.querySelector('[data-action="stop"]');
   modelSel = root.querySelector('.chat-model');
   tokenInfo = root.querySelector('.chat-token-info');
+  const agentSel = root.querySelector('.chat-agent-select');
 
   // Model selector
   for (const m of MODELS) {
@@ -63,6 +71,21 @@ export async function mountChat(container) {
   }
   modelSel.value = getSetting('chat.model') || MODELS[0];
   modelSel.addEventListener('change', () => setSetting('chat.model', modelSel.value));
+
+  // Agent selector (per-tab)
+  function refreshAgentSel() {
+    const tab = getTab(getActiveId());
+    fillAgentSelect(agentSel, tab?.agentId || '');
+  }
+  refreshAgentSel();
+  agentSel.addEventListener('change', async () => {
+    await setTabAgent(getActiveId(), agentSel.value || null);
+  });
+  bus.on('agents:changed', refreshAgentSel);
+  bus.on(EVT.TAB_SWITCHED, refreshAgentSel);
+  bus.on(EVT.TAB_UPDATED, refreshAgentSel);
+
+  root.querySelector('[data-action="manage-agents"]').addEventListener('click', () => openAgentManager());
 
   // Toolbar actions
   root.querySelector('[data-action="export-md"]').addEventListener('click', () => exportChat('md'));
@@ -88,12 +111,29 @@ export async function mountChat(container) {
   sendBtn.addEventListener('click', send);
   stopBtn.addEventListener('click', () => abortCtrl?.abort());
 
+  // @ mention dropdown
+  attachMentionDropdown(inputEl, async (agent) => {
+    await setTabAgent(getActiveId(), agent.id);
+    refreshAgentSel();
+  });
+
   // Delegated message actions
   listEl.addEventListener('click', onListClick);
 
-  await loadChat(DEFAULT_CHAT_ID);
+  await loadChat(getActiveId());
   rerender();
   inputEl.focus();
+
+  // React to tab switching / closing → reload current chat
+  bus.on(EVT.TAB_SWITCHED, async () => {
+    if (abortCtrl) abortCtrl.abort();
+    await loadChat(getActiveId());
+    rerender();
+  });
+  bus.on(EVT.TAB_CLOSED, async () => {
+    await loadChat(getActiveId());
+    rerender();
+  });
 }
 
 function autoResize() {
@@ -204,7 +244,11 @@ async function send() {
     toast('Configurez votre clé Mistral via ⚙ Réglages.', { type: 'error' });
     return;
   }
+  const activeId = getActiveId();
+  const isFirst = listMessages().filter((m) => m.role === 'user').length === 0;
   await addMessage({ role: 'user', content: text });
+  if (isFirst) await maybeAutoTitle(activeId, text);
+  await touchActive();
   inputEl.value = '';
   autoResize();
   tokenInfo.textContent = '0 car · ~0 tok';
@@ -216,16 +260,30 @@ async function runAssistant() {
   abortCtrl = new AbortController();
   setStreaming(true);
 
+  const tab = getTab(getActiveId());
+  const agent = tab?.agentId ? getAgent(tab.agentId) : null;
+  const sysExtra = (getSetting('chat.system_prompt') || '').trim();
+  const sysPrompt = buildSystemPrompt(agent, { extraSystem: sysExtra });
+  const model = (agent?.modelPref) || modelSel.value;
+  const temperature = agent ? Number(agent.temperature) : (Number(getSetting('chat.temperature')) || 0.7);
+  const maxTokens = agent ? Number(agent.maxTokens) : undefined;
+
   // Insert placeholder assistant message
-  const placeholder = await addMessage({ role: 'assistant', content: '', model: modelSel.value });
+  const placeholder = await addMessage({ role: 'assistant', content: '', model, agentId: agent?.id || null });
   streamingMsgId = placeholder.id;
   rerender();
 
   try {
+    const baseMsgs = buildContext().filter((m) => m.content !== '' || m.role === 'system');
+    // Replace any leading system from buildContext with agent-built system
+    const withoutSys = baseMsgs.filter((m) => m.role !== 'system');
+    const finalMsgs = sysPrompt ? [{ role: 'system', content: sysPrompt }, ...withoutSys] : withoutSys;
+
     const result = await streamMistral({
-      model: modelSel.value,
-      messages: buildContext().filter((m) => m.content !== '' || m.role === 'system'),
-      temperature: Number(getSetting('chat.temperature')) || 0.7,
+      model,
+      messages: finalMsgs,
+      temperature,
+      maxTokens,
       signal: abortCtrl.signal,
       onDelta: (_chunk, full) => {
         // Live-update placeholder DOM without full rerender
@@ -242,6 +300,7 @@ async function runAssistant() {
       content: result.content,
       tokens: result.usage ? { in: result.usage.prompt_tokens, out: result.usage.completion_tokens } : undefined,
     });
+    if (agent) await noteAgentUsed(agent.id);
   } catch (err) {
     if (err.name === 'AbortError') {
       toast('Génération interrompue.', { type: 'info', duration: 2000 });

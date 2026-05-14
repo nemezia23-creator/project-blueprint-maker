@@ -5,6 +5,202 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Phase 4.1 — Correctifs
+
+- **Agents : duplication & import résilients aux noms en doublon.**
+  `createAgent({ autoSuffix:true })` ajoute automatiquement ` (2)`, ` (3)`…
+  quand le nom est déjà pris. `duplicateAgent` et `importAgent` l'utilisent.
+- **EventBus : fix du crash sous charge de streaming.** Le panel DevTools
+  capturait des références live aux payloads (`chat:streaming` qui grossit
+  token par token) et re-rendait toute la liste à chaque event. Désormais :
+  (1) `chat:streaming` filtré par défaut (case à cocher), (2) snapshot +
+  troncature de chaque payload, (3) DOM append-only au lieu de full re-render.
+- **Logs lisibles.** Lignes longues cliquables → `<details>` qui révèle
+  la température et tout le payload d'agent en clair.
+- **`@mention` : Enter ne valide plus l'envoi.** Keydown du dropdown en
+  `capture:true` + `stopImmediatePropagation()`. `Tab` valide aussi le pick.
+- **Logs explicites.** `agent-manager` log `info` à chaque
+  `created`/`updated`/`deleted`.
+
+### Phase 4 — Système d'agents
+
+Implémentation complète du module `modules/agents/` (SPEC §4.3). Chaque
+onglet peut désormais être lié à un agent ; le system prompt envoyé à
+l'API est construit à partir de l'agent actif (température, maxTokens et
+modèle préféré peuvent également surcharger ceux du chat).
+
+**Modules ajoutés**
+- `agents/agent-schema.js` — schéma V2, `defaultAgent()`, `validateAgent()`
+  (validation zero-dep, messages d'erreurs FR).
+- `agents/agent-manager.js` — CRUD (`createAgent`, `updateAgent`,
+  `deleteAgent`, `archiveAgent`, `activateAgent`, `duplicateAgent`,
+  `exportAgent`, `importAgent`, `noteAgentUsed`), seed des 4 agents par
+  défaut au premier boot (`agents_seeded` flag), migration douce des
+  agents V1 sans champ `version`.
+- `agents/agent-prompt-builder.js` — `buildSystemPrompt(agent, opts)` avec
+  template Jinja-lite (`{{name}} {{role}} {{primer}} {{instructions}}
+  {{forbidden}} {{style}} {{tags}} {{date}}`) et fallback structuré
+  (Tu es / Rôle / Primer / Instructions / Style / Interdits / Tags).
+- `agents/agent-ui.js` — modal de gestion (liste + édition + import /
+  export JSON), sélecteur intégré à la toolbar du chat, dropdown de
+  mention `@agent` (fuzzy sur nom/tags/desc, navigation clavier).
+- `themes/agents.css` — styles tokenisés (modal, liste, formulaire,
+  dropdown mention, bordure colorée par agent).
+
+**Agents par défaut seedés au premier boot**
+- ◈ **Généraliste** — assistant polyvalent.
+- ⌬ **CodeForge** — ingénieur logiciel senior, temp 0.3.
+- ✎ **WriterPro** — rédacteur, temp 0.85, style créatif.
+- 🔬 **ResearchBot** — chercheur, temp 0.5, style pédagogique.
+
+**Modifications transverses**
+- `tabs/tab-engine.js` — `setTabAgent(tabId, agentId)` ajouté.
+- `chat/chat-ui.js` — sélecteur d'agent dans la toolbar (par onglet),
+  bouton « ◈ Agents », `@` mention dropdown branché sur le textarea,
+  injection du system prompt par l'agent (`buildSystemPrompt`),
+  température/maxTokens/modelPref overridés par l'agent quand défini,
+  `noteAgentUsed` appelé après chaque réponse.
+- `chat/chat-manager.js` — `addMessage` enregistre désormais `agentId`
+  pour traçabilité.
+- `app.js` — `bootAgents()` après `loadTabs()`, bouton header
+  `#open-agents`.
+- `index.html` — link `themes/agents.css`, bouton « ◈ Agents », bump
+  version "phase 4".
+
+**Tests** — `tests/test-checklist.md` section Phase 4 (CRUD, switch
+d'agent en cours de conversation, mention `@`, import / export JSON,
+archive / réactivation, propagation du system prompt).
+
+**Notes de compat** — Aucun agent V1 n'est supprimé. Les anciens
+enregistrements sont complétés avec les champs manquants au prochain boot
+(idempotent grâce au flag `agents_seeded`).
+
+### Phase 3 — Multi-onglets
+
+Implémentation du système d'onglets décrit dans `SPECIFICATION.md` §1.4 et §4.1.
+Chaque onglet est une conversation isolée persistée dans le store `tabs` d'AlfredDB.
+Les messages restent dans `chats` mais sont filtrés par `chatId === tab.id`,
+donc Phase 2 reste 100 % compatible (l'ancien chat `default` se retrouve
+simplement comme l'un des tabs après création d'un onglet manuel — ou ré-attribué
+au premier tab via migration douce si besoin futur).
+
+**Modules ajoutés** (`modules/tabs/`)
+- `tab-engine.js` — CRUD onglets (`createTab`, `closeTab`, `switchTab`,
+  `renameTab`, `togglePin`, `reorderTabs`, `cycleTab`), auto-titrage
+  (`maybeAutoTitle`), garde-fou `installWindowOpenGuard()` qui neutralise
+  `window.open` et redirige l'utilisateur vers Ctrl+N.
+- `tab-renderer.js` — barre d'onglets DOM avec drag-and-drop natif HTML5,
+  double-click pour renommer, middle-click pour fermer, menu contextuel
+  (épingle / renommer / fermer) déclenché au clic droit.
+- `tab-keybindings.js` — raccourcis globaux : `Ctrl/Cmd + N`, `Ctrl/Cmd + W`,
+  `Ctrl/Cmd + Tab` / `+ Shift + Tab`. Comme le navigateur intercepte souvent
+  ces combos, des alternatives **Alt-based** garanties sont fournies :
+  `Alt + N`, `Alt + W`, `Alt + ←/→`.
+
+**Persistance & restauration**
+- Tab actif mémorisé dans `settings.tabs.activeId` ; restauration au boot.
+- Limite douce `max_tabs` (defaut 20) → archivage du plus ancien non-épinglé ;
+  hard cap 50 (erreur explicite).
+- Auto-titre : le premier message utilisateur (≤30 chars) renomme l'onglet
+  si son titre est encore "Conversation N".
+
+**UX**
+- Bouton `+` à droite de la barre, onglet actif souligné en accent.
+- Onglet épinglé : pas de bouton ×, ne peut pas être fermé par accident.
+- Drag-and-drop pour réordonner ; l'ordre est persisté (champ `order`).
+- Fermeture d'onglet supprime ses messages associés (confirmation préalable).
+- Si on ferme le dernier onglet, un nouvel onglet vide est créé automatiquement.
+
+**Modifications transverses**
+- `chat/chat-manager.js` : `loadChat(id)` accepte explicitement un tab id ;
+  `addMessage` utilise `currentChatId` (set automatiquement par `loadChat`).
+  `setCurrentChatId(id)` exposé pour usage avancé.
+- `chat/chat-ui.js` : écoute `TAB_SWITCHED` / `TAB_CLOSED`, recharge la liste
+  de messages et coupe tout streaming en cours avant de switcher.
+- `app.js` : charge les onglets après les settings, installe la garde
+  `window.open`, branche les raccourcis, monte la barre d'onglets au-dessus
+  du chat. Bus `toast` global pour notifications inter-modules.
+- `themes/tabs.css` : styles tokenisés (zéro couleur en dur, cohérent avec
+  les 3 thèmes).
+- `index.html` : intègre `tabs.css` et bump version "phase 3".
+
+### Détail des phases à venir
+
+#### Phase 4 — Système d'agents (`modules/agents/`)
+- `agent-manager.js` : CRUD agent (schéma v2 selon SPEC §4.3), lifecycle
+  draft/active/archived, validation JSON-schema avant persistance.
+- `agent-schema.js` : schéma + validateur léger (pas d'AJV pour rester
+  zero-dep), messages d'erreurs FR.
+- `agent-runner.js` : exécution d'un tour de chat avec contexte agent
+  (system prompt construit par `agent-prompt-builder.js`, mémoires filtrées
+  par tags de l'agent, température/maxTokens propres à l'agent).
+- `agent-prompt-builder.js` : template Jinja-lite — substitution de
+  `{{name}}`, `{{role}}`, `{{primer}}`, `{{forbidden}}`, etc.
+- Intégration tabs : `TabState.agentId` détermine l'agent actif d'un onglet ;
+  sélecteur d'agent ajouté à la chat-toolbar.
+- `@` mention dropdown (UI partagée) — utilise `command-palette` style fuzzy.
+- Tests : créer/éditer/archiver agent, switch d'agent en cours de conversation
+  (n'efface pas l'historique mais change le system prompt à partir de
+  l'échange suivant).
+
+#### Phase 5 — Mémoire documentaire (`modules/memory/`)
+- `memory-manager.js` : CRUD mémoire (store `memories`), versioning léger
+  (champ `version` incrémenté à chaque update, historique optionnel).
+- `memory-index.js` : index inversé fait-maison (token → set d'ids), TF-IDF
+  léger, tokenizer FR (stop-words). Pas de Lunr (dépendance externe).
+- `memory-filters.js` : filtres composables (tags, type, date, owner,
+  confidence ≥ X).
+- Bouton "⬡ Mémoriser" dans les actions message ; injection auto dans le
+  contexte chat selon `agent.memPrio` et `agent.tags`.
+
+#### Phase 6 — Pipeline fichiers (`modules/files/`)
+- `file-upload.js` : drag-and-drop sur la zone chat + input fichier, MIME
+  whitelist, taille max configurable.
+- `file-parser.js` : extracteurs pour PDF (PDF.js), DOCX (mammoth.js via CDN
+  ESM), TXT, CSV, JSON, Markdown.
+- `file-segmenter.js` : chunking token-aware (overlap configurable).
+- `file-summarizer.js` : résumé par chunks via API, agrégation, injection
+  dans `memories` avec lien vers le fichier source dans `files`.
+
+#### Phase 7 — Orchestrateur + Tasks (`modules/agents/orchestrator.js` + `modules/tasks/`)
+- `orchestrator.js` : agent spécial (`isOrchestrator: true`) qui retourne un
+  JSON validé `{plan: [{agentId, prompt, dependsOn}]}` ; exécution via
+  `task-engine`, suivi en temps réel sur le kanban.
+- `task-engine.js` : machine d'état (`pending → running → done | failed`),
+  retries configurables, timeouts.
+- `task-kanban.js` : kanban DOM avec colonnes ; `task-graph.js` : vue DAG.
+- `task-sync.js` : EventBus → mise à jour visuelle ; agent ↔ task linking.
+
+#### Phase 8 — Command Palette + 8 agents pré-installés (`modules/commands/`)
+- `command-palette.js` : Ctrl/Cmd+K, fuzzy search, navigation clavier.
+- `command-registry.js` : enregistrement par modules (chaque module expose
+  ses commandes au boot).
+- `builtin-commands.js` : nouveau chat, ouvrir mémoire, switch thème,
+  exporter, etc.
+- 8 agents de supervision pré-installés selon `docs/SUPERVISION.md`
+  (Architecte, Auditeur, Documenteur, etc.) — seedés au premier boot via
+  `agent-manager.seedDefaults()` si `settings.agents_seeded !== true`.
+
+### Phase 1 — Bugfixes (DevTools + accès BDD in-app)
+- **Bug** : aucune entrée DevTools dans la barre d'en-tête et aucune façon in-app de visualiser la base IndexedDB. F12 envoyait vers les DevTools du navigateur (ce que tout utilisateur non-tech ne pouvait pas faire).
+- **Fix** : panneau DevTools intégré à l'app avec 5 onglets (Logs / Database / Settings / EventBus / API).
+  - Bouton **🛠 DevTools** ajouté dans la barre d'en-tête.
+  - Raccourci clavier **Ctrl/Cmd + Shift + D** (toggle). `F12` reste tenté en `preventDefault` mais reste non garanti (le navigateur peut l'intercepter avant l'app — c'est pourquoi le combo Ctrl+Shift+D est la voie officielle).
+  - `Escape` ferme le panneau.
+- **Onglet Logs** : historique en mémoire (ring buffer 500 entrées) avec filtre texte, sélecteur de niveau live, export `.txt`, effacement.
+- **Onglet Database** : navigation parmi les 8 stores `AlfredDB`, comptage, vue déroulante JSON par enregistrement, suppression d'enregistrement, vidage de store avec confirmation. Plus besoin d'aller dans DevTools navigateur → Application → IndexedDB.
+- **Onglet Settings** : visualisation live + édition + ajout de clés (les clés sensibles type `api_key/secret/token` sont masquées).
+- **Onglet EventBus** : sniffer wildcard (`bus.on('*', …)`) qui capture tous les `EVT.*` émis pendant l'ouverture du panneau, avec horodatage et payload résumé.
+- **Onglet API** : statut de la clé Mistral, set / replace / clear sans passer par le prompt `⚙ Réglages`.
+
+### Modifications techniques
+- `core/logger.js` : ajout d'un ring buffer (`getLogHistory`, `onLog`, `clearLogHistory`) — chaque log console est aussi capturé pour le panneau, sans impact sur les niveaux.
+- `core/event-bus.js` : support du wildcard `bus.on('*', (type, payload) => …)` pour permettre l'écoute globale par DevTools.
+- `ui/devtools.js` (nouveau) : module du panneau, mount via `installDevTools()` + API `open/close/toggle` exposée sur `window.Alfred.devtools`.
+- `themes/devtools.css` (nouveau) : styles theme-agnostic via custom props, surcharges light mode.
+- `index.html` : nouveau bouton `#open-devtools` + link CSS.
+- `app.js` : `installDevTools()` au boot, click handler sur le bouton.
+
 ### Phase 2 (à venir) — Chat mono-onglet
 - `chat/chat-manager.js`, `chat-stream.js`, `chat-renderer.js`, `chat-actions.js`
 - Streaming SSE Mistral

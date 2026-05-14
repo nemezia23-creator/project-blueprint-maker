@@ -11,17 +11,22 @@ const log = createLogger('chat-mgr');
 export const DEFAULT_CHAT_ID = 'default';
 
 let messages = []; // in-memory cache, sorted by ts asc
+let currentChatId = DEFAULT_CHAT_ID;
+
+export function getCurrentChatId() { return currentChatId; }
+export function setCurrentChatId(id) { currentChatId = id || DEFAULT_CHAT_ID; }
 
 function uid() {
   return 'm_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
 }
 
-export async function loadChat(chatId = DEFAULT_CHAT_ID) {
+export async function loadChat(chatId = currentChatId) {
+  currentChatId = chatId;
   const all = await getAll('chats');
   messages = all
     .filter((m) => m.chatId === chatId)
     .sort((a, b) => a.ts - b.ts);
-  log.debug(`loaded ${messages.length} messages`);
+  log.debug(`loaded ${messages.length} messages for ${chatId}`);
   return messages.slice();
 }
 
@@ -30,13 +35,14 @@ export function listMessages() { return messages.slice(); }
 export async function addMessage(msg) {
   const full = {
     id: msg.id || uid(),
-    chatId: msg.chatId || DEFAULT_CHAT_ID,
+    chatId: msg.chatId || currentChatId,
     role: msg.role,
     content: msg.content ?? '',
     ts: msg.ts || Date.now(),
     model: msg.model,
     tokens: msg.tokens,
     rating: msg.rating ?? 0,
+    agentId: msg.agentId ?? null,
   };
   messages.push(full);
   await put('chats', full);

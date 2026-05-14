@@ -103,3 +103,134 @@ Alfred.bus.on('boot:ready', () => console.log('READY'));
 - [ ] Export .md télécharge un fichier lisible avec horodatages
 - [ ] Export .txt fonctionne
 - [ ] "⟲ Nouveau" → confirmation + chat vidé
+
+---
+
+# Test checklist — Phase 3 (Multi-onglets)
+
+## Création / fermeture
+
+- [ ] Au premier boot, un onglet "Conversation 1" existe par défaut
+- [ ] Bouton `+` → crée un nouvel onglet, switch automatique dessus
+- [ ] `Ctrl/Cmd + N` → idem (peut être intercepté par le navigateur)
+- [ ] `Alt + N` → idem (toujours fonctionnel)
+- [ ] Bouton `×` sur un onglet → confirmation puis fermeture
+- [ ] Middle-click sur un onglet → confirmation puis fermeture
+- [ ] `Alt + W` → ferme l'onglet actif
+- [ ] Fermer le dernier onglet → un nouvel onglet vide est recréé
+- [ ] Au-delà de `max_tabs` (default 20), le plus ancien non-épinglé est archivé
+
+## Switch / cycle
+
+- [ ] Click sur un onglet → switch, le chat affiche les messages de ce tab
+- [ ] `Alt + →` cycle vers l'onglet suivant
+- [ ] `Alt + ←` cycle vers l'onglet précédent
+- [ ] `Ctrl/Cmd + Tab` cycle (si non intercepté par le navigateur)
+- [ ] Streaming en cours → switch d'onglet : la génération est interrompue proprement
+
+## Rename / pin / reorder
+
+- [ ] Double-click sur un titre → prompt de renommage → persiste après refresh
+- [ ] Right-click → menu (1=pin, 2=rename, 3=close)
+- [ ] Onglet épinglé : pas de bouton ×, refus de fermeture
+- [ ] Drag-and-drop entre onglets → l'ordre est persisté après refresh
+
+## Auto-titre
+
+- [ ] Sur un onglet "Conversation N", le premier message user (>0 char) renomme
+      l'onglet (≤30 chars)
+- [ ] Si l'onglet a déjà été renommé manuellement, l'auto-titre n'écrase rien
+
+## Isolation
+
+- [ ] Les messages d'un onglet n'apparaissent pas dans un autre
+- [ ] DevTools → Database → `chats` : chaque message a `chatId === tab.id`
+- [ ] DevTools → Database → `tabs` : la liste reflète l'UI
+
+## Persistance / restauration
+
+- [ ] Refresh → tous les onglets reviennent dans le même ordre
+- [ ] L'onglet actif au moment du refresh est restauré
+- [ ] `settings.tabs.activeId` = id de l'onglet actif (vérifiable DevTools)
+
+## Anti-nouvelle-fenêtre
+
+- [ ] Dans la console : `window.open('https://example.com')` → toast info
+      "Alfred fonctionne en onglets…", retourne `null`, n'ouvre rien
+
+## EventBus
+
+- [ ] `Alfred.bus.on('tab:switched', console.log)` puis click sur un onglet → log
+- [ ] `tab:created`, `tab:closed`, `tab:updated` émis aux bons moments
+
+---
+
+# Phase 4 — Système d'agents
+
+## Boot & seed
+
+- [ ] Premier boot d'une DB vierge → 4 agents créés automatiquement
+      (Généraliste, CodeForge, WriterPro, ResearchBot), `settings.agents_seeded = true`
+- [ ] Reboot → pas de re-seed (idempotence)
+- [ ] DevTools → Database → `agents` contient bien les 4 lignes avec `version: 2`
+
+## Ouverture du gestionnaire
+
+- [ ] Bouton header `◈ Agents` ouvre la modal
+- [ ] La liste de gauche affiche les 4 agents, leur couleur en bord gauche
+- [ ] Click sur un agent affiche le formulaire d'édition à droite
+- [ ] `Escape` ferme la modal ; click hors de la carte ferme aussi
+
+## CRUD
+
+- [ ] Bouton `+ Nouveau` ouvre un formulaire vide
+- [ ] Soumettre sans nom → erreur visible (toast rouge)
+- [ ] Créer un agent valide → apparaît dans la liste, toast succès
+- [ ] Éditer un agent existant → enregistre, le toast s'affiche, la modale reste
+- [ ] Dupliquer → crée une copie suffixée `(copie)` en `draft`
+- [ ] Archiver → l'agent passe en `archived`, il disparaît du sélecteur de la
+      toolbar mais reste visible (grisé) dans la modal
+- [ ] Désarchiver → repasse en `active`
+- [ ] Supprimer → confirmation puis disparition de la liste et de la DB
+
+## Import / export
+
+- [ ] Export JSON → télécharge un `.agent.json` valide
+- [ ] Import du même fichier → crée un nouvel agent (nouvel id), nom suffixé
+      manuellement si conflit (sinon erreur affichée)
+
+## Sélecteur dans le chat
+
+- [ ] La toolbar du chat affiche un select avec « — sans agent — » + les agents
+      actifs
+- [ ] Sélectionner un agent persiste sur l'onglet (refresh → toujours actif)
+- [ ] Switch d'onglet → le sélecteur reflète l'agent du nouvel onglet
+
+## System prompt effectif
+
+- [ ] Avec un agent sélectionné, envoyer un message →
+      DevTools → onglet EventBus / Logs → l'API reçoit un `system` construit à
+      partir du `name`, `role`, `instructions`, `style`, `forbidden`, `tags`
+- [ ] Sans agent, le system prompt est celui de `chat.system_prompt` (settings)
+      ou aucun si vide
+- [ ] La température et `max_tokens` envoyés correspondent à ceux de l'agent
+- [ ] Si `modelPref` est défini sur l'agent, c'est ce modèle qui est utilisé
+      (et non celui du select de la toolbar)
+
+## @ Mention dropdown
+
+- [ ] Taper `@` dans le textarea ouvre le dropdown
+- [ ] Taper `@cod` filtre sur "CodeForge"
+- [ ] `↑/↓` navigue, `Entrée` insère `@CodeForge ` et lie l'onglet à cet agent
+- [ ] `Échap` ferme le dropdown sans rien insérer
+- [ ] Click souris sur un item équivaut à Entrée
+
+## Compatibilité
+
+- [ ] Anciens agents V1 sans `version` → migrés silencieusement au prochain boot
+- [ ] Aucun agent supprimé par la migration
+
+## EventBus
+
+- [ ] `Alfred.bus.on('agent:created', console.log)` puis création → log
+- [ ] `agent:updated` / `agent:deleted` émis aux bons moments
