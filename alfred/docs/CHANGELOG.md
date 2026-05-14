@@ -5,6 +5,23 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Phase 4.1 — Correctifs
+
+- **Agents : duplication & import résilients aux noms en doublon.**
+  `createAgent({ autoSuffix:true })` ajoute automatiquement ` (2)`, ` (3)`…
+  quand le nom est déjà pris. `duplicateAgent` et `importAgent` l'utilisent.
+- **EventBus : fix du crash sous charge de streaming.** Le panel DevTools
+  capturait des références live aux payloads (`chat:streaming` qui grossit
+  token par token) et re-rendait toute la liste à chaque event. Désormais :
+  (1) `chat:streaming` filtré par défaut (case à cocher), (2) snapshot +
+  troncature de chaque payload, (3) DOM append-only au lieu de full re-render.
+- **Logs lisibles.** Lignes longues cliquables → `<details>` qui révèle
+  la température et tout le payload d'agent en clair.
+- **`@mention` : Enter ne valide plus l'envoi.** Keydown du dropdown en
+  `capture:true` + `stopImmediatePropagation()`. `Tab` valide aussi le pick.
+- **Logs explicites.** `agent-manager` log `info` à chaque
+  `created`/`updated`/`deleted`.
+
 ### Phase 4 — Système d'agents
 
 Implémentation complète du module `modules/agents/` (SPEC §4.3). Chaque
