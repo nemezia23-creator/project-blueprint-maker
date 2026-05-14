@@ -278,22 +278,47 @@ async function renderSettings(body) {
 /* ---------- Tab: EventBus ---------- */
 function renderBus(body) {
   body.innerHTML = '';
+  const counter = el('span', { class: 'devtools-muted' }, `${state.busEvents.length} événement(s)`);
+  const list = el('ul', { class: 'devtools-list devtools-bus' });
   const toolbar = el('div', { class: 'devtools-toolbar' }, [
     el('strong', {}, 'Flux EventBus (live)'),
-    el('button', { type: 'button', on: { click: () => { state.busEvents = []; renderBus(body); } } }, 'Effacer'),
-    el('span', { class: 'devtools-muted' }, `${state.busEvents.length} événement(s)`),
+    el('button', { type: 'button', on: { click: () => { state.busEvents = []; list.innerHTML = ''; counter.textContent = '0 événement(s)'; } } }, 'Effacer'),
+    el('label', {}, [
+      ' ',
+      (() => {
+        const cb = el('input', { type: 'checkbox' });
+        cb.checked = !!state.includeNoisy;
+        cb.addEventListener('change', () => { state.includeNoisy = cb.checked; });
+        return cb;
+      })(),
+      ' afficher chat:streaming',
+    ]),
+    counter,
   ]);
-  const list = el('ul', { class: 'devtools-list devtools-bus' });
-  for (const ev of state.busEvents.slice().reverse()) {
-    list.appendChild(el('li', {}, [
-      el('span', { class: 'devtools-log-ts' }, fmtTime(ev.ts)),
-      el('span', { class: 'devtools-bus-type' }, ev.type),
-      el('span', { class: 'devtools-bus-payload' }, summarize(ev.payload)),
-    ]));
-  }
+  // Render newest first (reverse order)
+  for (const ev of state.busEvents.slice().reverse()) appendBusRow(list, ev);
   body.appendChild(toolbar);
   body.appendChild(list);
 }
+
+function appendBusRow(list, ev) {
+  const summary = summarize(ev.payload, 240);
+  const row = el('li', {}, [
+    el('details', {}, [
+      el('summary', {}, [
+        el('span', { class: 'devtools-log-ts' }, fmtTime(ev.ts)),
+        el('span', { class: 'devtools-bus-type' }, ev.type),
+        el('span', { class: 'devtools-bus-payload' }, summary),
+      ]),
+      el('pre', { class: 'devtools-db-json' }, safeStringify(ev.payload)),
+    ]),
+  ]);
+  // Insert at top (newest first)
+  list.insertBefore(row, list.firstChild);
+  // Cap DOM rows to avoid bloat
+  while (list.childElementCount > BUS_MAX) list.removeChild(list.lastChild);
+}
+
 
 /* ---------- Tab: API ---------- */
 function renderAPI(body) {
