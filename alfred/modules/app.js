@@ -74,7 +74,7 @@ async function boot() {
       `DB · ${Object.entries(stats).map(([k, v]) => `${k}:${v}`).join(' · ')}`;
     $('#footer-api').textContent = hasApiKey('mistral') ? 'API · Mistral ✓' : 'API · Mistral ✗ (cliquer Réglages)';
 
-    $('#boot-status').textContent = 'Système prêt — Phase 4 opérationnelle.';
+    $('#boot-status').textContent = 'Système prêt — Phase 4 (corrigée).';
     $('#boot-status').dataset.ready = 'true';
     bus.emit(EVT.BOOT_READY);
     log.info('boot complete');
