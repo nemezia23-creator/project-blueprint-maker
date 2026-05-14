@@ -215,10 +215,29 @@ async function renderDB(body) {
   body.appendChild(grid);
 }
 
-function summarize(row) {
+function summarize(row, max = 200) {
   const s = safeStringify(row).replace(/\s+/g, ' ');
-  return s.length > 80 ? s.slice(0, 80) + '…' : s;
+  return s.length > max ? s.slice(0, max) + '…' : s;
 }
+
+// Snapshot a payload safely so the devtools doesn't keep references
+// to live, growing objects (root cause of bus overload on streaming).
+function snapshotPayload(p, maxLen = 400) {
+  if (p == null) return p;
+  try {
+    const json = JSON.stringify(p, (k, v) => {
+      if (typeof v === 'string' && v.length > maxLen) return v.slice(0, maxLen) + `…(+${v.length - maxLen})`;
+      return v;
+    });
+    return json && json.length > 2000 ? json.slice(0, 2000) + '…' : JSON.parse(json);
+  } catch {
+    return String(p);
+  }
+}
+
+// Events too noisy for the bus panel (fire many times per second).
+const NOISY_EVENTS = new Set(['chat:streaming']);
+
 
 /* ---------- Tab: Settings ---------- */
 async function renderSettings(body) {
